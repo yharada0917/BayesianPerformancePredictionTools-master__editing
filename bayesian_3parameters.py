@@ -32,29 +32,20 @@ def main(l, y_range):
         if not item in ['node', 'SEP', 'Reducer']:
             routine_list.append(item)
 
-    parameter = ['c1','c2','c3','c4','c5','eps','tau']
+    parameter = ['c1','c2','c3','eps','tau']
 
     def model(x, y):
-        c1 = pymc.Uniform('c1', lower=0, upper=100000)#c1の初期分布（lowerからupperまでの一様分布）
-        c2 = pymc.Uniform('c2', lower=0, upper=100000)#c2の初期分布（lowerからupperまでの一様分布）
-        c3 = pymc.Uniform('c3', lower=0, upper=100000)#c3の初期分布（lowerからupperまでの一様分布）
-        c4 = pymc.Uniform('c4', lower=0, upper=10000000)#c4の初期分布（lowerからupperまでの一様分布）
-        c5 = pymc.Uniform('c5', lower=0, upper=100000)#c5の初期分布（lowerからupperまでの一様分布）
-        eps = pymc.Uniform('eps', lower=0, upper=0.5)#誤差パラメータepsの初期分布（lowerからupperまでの一様分布）
+        c1 = pymc.Uniform('c1', lower=-100000, upper=100000)#c1の初期分布（lowerからupperまでの一様分布）
+        c2 = pymc.Uniform('c2', lower=-100000, upper=100000)#c2の初期分布（lowerからupperまでの一様分布）
+        c3 = pymc.Uniform('c3', lower=-100000, upper=100000)#c3の初期分布（lowerからupperまでの一様分布）
+        eps = pymc.Uniform('eps', lower=0, upper=0.00001)#誤差パラメータepsの初期分布（lowerからupperまでの一様分布）
 
         @pymc.deterministic
-        def function(x=x, c1=c1, c2=c2, c3=c3, c4=c4, c5=c5):
+        def function(x=x, c1=c1, c2=c2, c3=c3):
             if l:
-                x_list = []
-                for i in range(len(x)):
-                    if x[i]>100:
-                        term5 = 0.0
-                    else:
-                        term5 = (c5 * x[i])/(np.exp(0.5*x[i]))
-                    x_list.append(np.log((c4 / np.exp(2.0*x[i])) + (c1 / np.exp(x[i])) + c2 + (c3 * x[i]) + term5))
-                return x_list
+                return (c1 / np.exp(x)) + c2 + (c3 * x)
             else:
-                return np.log((c4 / np.exp(2.0*x)) + (c1 / np.exp(x)) + c2 + (c3 * np.exp(x)) + c5*(np.log(x)/np.sqrt(x)))
+                return (c1 / np.exp(x)) + c2 + (c3 * np.exp(x))
 
 
         @pymc.deterministic
@@ -77,7 +68,7 @@ def main(l, y_range):
         print(i, dict_value[i][split_start:n_split])
         y_true = copy.deepcopy(dict_value[i][split_start:])
         time = copy.deepcopy(dict_value[i][split_start:n_split])
-        time = np.log(time)
+        time = time
 
         pymc.numpy.random.seed(0)
         mcmc = pymc.MCMC(model(node, time))
@@ -106,23 +97,17 @@ def main(l, y_range):
                 c1 = trace_list[0][C]
                 c2 = trace_list[1][C]
                 c3 = trace_list[2][C]
-                c4 = trace_list[3][C]
-                c5 = trace_list[4][C]
                 if l:
-                    if P>100:
-                        term5 = 0.0
-                    else:
-                        term5 = (c5*P)/(np.exp(0.5*P))
-                    T_list_single.append((c4 / P**2.0) + (c1 / P) + c2 + (c3 * np.log(P)) + term5)
+                    T_list_single.append((c1 / P) + c2 + (c3 * np.log(P)))
                 else:
-                    T_list_single.append((c4 / P**2.0) + (c1 / P) + c2 + (c3 * P) + c5*(np.log(P)/np.sqrt(P)))
+                    T_list_single.append((c1 / P) + c2 + (c3 * P))
             T_list.append(T_list_single)
 
         print("len(trace_list[0])",len(trace_list[0]))
         print("trace_list[0]")
         print(trace_list[0])
         f1 = open('./%s/trace.txt' % i,"w")
-        f1.write("#j c1 c2 c3 c4 c5")
+        f1.write("#j c1 c2 c3")
         for P in x_true:
             f1.write(" %s"% int(P))
         f1.write("\n")
@@ -134,10 +119,6 @@ def main(l, y_range):
             f1.write(str(trace_list[1][C]))
             f1.write(" ")
             f1.write(str(trace_list[2][C]))
-            f1.write(" ")
-            f1.write(str(trace_list[3][C]))
-            f1.write(" ")
-            f1.write(str(trace_list[4][C]))
             for CC in range(len(T_list)):
                 f1.write(" ")
                 f1.write(str(T_list[CC][C]))
@@ -152,8 +133,6 @@ def main(l, y_range):
         c1_median = np.median(mcmc.trace('c1', chain=None)[:])
         c2_median = np.median(mcmc.trace('c2', chain=None)[:])
         c3_median = np.median(mcmc.trace('c3', chain=None)[:])
-        c4_median = np.median(mcmc.trace('c4', chain=None)[:])
-        c5_median = np.median(mcmc.trace('c5', chain=None)[:])
 
         c1_min = mcmc.stats()['c1']['95% HPD interval'][0]
         c1_max = mcmc.stats()['c1']['95% HPD interval'][1]
@@ -161,36 +140,25 @@ def main(l, y_range):
         c2_max = mcmc.stats()['c2']['95% HPD interval'][1]
         c3_min = mcmc.stats()['c3']['95% HPD interval'][0]
         c3_max = mcmc.stats()['c3']['95% HPD interval'][1]
-        c4_min = mcmc.stats()['c4']['95% HPD interval'][0]
-        c4_max = mcmc.stats()['c4']['95% HPD interval'][1]
-        c5_min = mcmc.stats()['c5']['95% HPD interval'][0]
-        c5_max = mcmc.stats()['c5']['95% HPD interval'][1]
+
         y_pre = []
         y_pre_min = []
         y_pre_max = []
 
         for P in x_true:
             if l:
-                if P>100:
-                    term5_median = 0.0
-                    term5_min = 0.0
-                    term5_max = 0.0
-                else:
-                    term5_median = (c5_median*P)/(np.exp(0.5*P))
-                    term5_min = (c5_min*P)/(np.exp(0.5*P))
-                    term5_max = (c5_max*P)/(np.exp(0.5*P))
-                y_pre.append((c4_median / P**2.0) + (c1_median / P) + c2_median + (c3_median * np.log(P)) + term5_median)
-                y_pre_min.append((c4_min / P**2.0) + (c1_min / P) + c2_min + (c3_min * np.log(P)) + term5_min)
-                y_pre_max.append((c4_max / P**2.0) + (c1_max / P) + c2_max + (c3_max * np.log(P)) + term5_max)
+                y_pre.append((c1_median / P) + c2_median + (c3_median * np.log(P)))
+                y_pre_min.append((c1_min / P) + c2_min + (c3_min * np.log(P)))
+                y_pre_max.append((c1_max / P) + c2_max + (c3_max * np.log(P)))
             else:
-                y_pre.append((c4_median / P**2.0) + (c1_median / P) + c2_median + (c3_median * P) + c5_median*(np.log(P)/np.sqrt(P)))
-                y_pre_min.append((c4_min / P**2.0) + (c1_min / P) + c2_min + (c3_min * P) + c5_min*(np.log(P)/np.sqrt(P)))
-                y_pre_max.append((c4_max / P**2.0) + (c1_max / P) + c2_max + (c3_max * P) + c5_max*(np.log(P)/np.sqrt(P)))
+                y_pre.append((c1_median / P) + c2_median + (c3_median * P))
+                y_pre_min.append((c1_min / P) + c2_min + (c3_min * P))
+                y_pre_max.append((c1_max / P) + c2_max + (c3_max * P))
 
         data_list.append([y_true, y_pre, i])
         plt.plot(x_true, y_true, ls='-', lw=1, label='True', marker='o')
-        plt.plot(x_true, y_pre, label='Predict (median of c1, c2, c3, c4, c5)', marker='o')
-        plt.fill_between(x_true, y_pre_min, y_pre_max, color='r', alpha=0.1, label='95% HPD interval of c1, c2, c3, c4, c5')
+        plt.plot(x_true, y_pre, label='Predict (median of c1, c2, c3)', marker='o')
+        plt.fill_between(x_true, y_pre_min, y_pre_max, color='r', alpha=0.1, label='95% HPD interval of c1, c2, c3')
         plotting(plt, './%s/graph.png' % i, i, '(%s)' % i, x_true, [min(y_pre_min), max(y_pre_max)])
         f2 = open('./%s/text.txt' % i,'w')
         f2.write("#x_true y_true y_pre y_pre_min y_pre_max")
@@ -246,8 +214,8 @@ def plotting(plt, path, title, y_label, node, y_range):
         plt.ylim(y_range[0], y_range[1])
 
     plt.legend()
-    plt.xscale('log', basex=2)
-    plt.yscale('log', basey=10)
+    #plt.xscale('log', basex=2)
+    #plt.yscale('log', basey=10)
 
     plt.xlabel("Number of CPU (P)")
     plt.ylabel('Elapse Time %s [sec]' % y_label)
